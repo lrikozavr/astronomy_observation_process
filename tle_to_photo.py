@@ -243,6 +243,8 @@ def drawbridges(data):
             d_time = int(time_2) - int(time_1)
             mass.append([name,time_1,time_2,d_time])
 
+
+
     def ap_line(data_time,mass,i):
         line1 = [mass[i][0],mass[i][1],1,1,1]
         line2 = [mass[i][0],mass[i][2],-1,1,0]
@@ -252,6 +254,17 @@ def drawbridges(data):
         return data_time        
 
     def ladder(mass):
+        new_mass = []
+        for i in range(len(mass)):
+            if(mass[i][0] == '0'):
+                continue
+            for j in range(i,len(mass),1):
+                if(int(mass[j][1]) > int(mass[i][2])):
+                    continue
+                elif(int(mass[j][2]) <= int(mass[i][2])):
+                    mass[j][0] = '0'
+            new_mass.append(mass[i])
+        mass = new_mass
         d = int(mass[len(mass)-1][2]) - int(mass[0][1])
         sum = 0
         a = []
@@ -269,7 +282,7 @@ def drawbridges(data):
             data_time = ap_line(data_time,mass,i)
         #print(data_time)
         data_time = process_1(data_time)
-        sys.stderr.write(str(data_time))
+        #sys.stderr.write(str(data_time))
         return data_time
 
     def simple_first(mass):
@@ -280,11 +293,11 @@ def drawbridges(data):
                 continue
             data_time = ap_line(data_time,mass,i)
             for ii in range(i,len(mass),1):
-                if(mass[i][2] >= mass[ii][2]):
+                if(int(mass[i][2]) >= int(mass[ii][2])):
                     mass[ii][0] = '0'
-                elif(mass[i][2] > mass[i][1]):
-                    mass[ii][1] = mass[i][2]
-                    d_t(mass,ii)
+                elif(int(mass[i][2]) > int(mass[ii][1])):
+                    mass[ii][1] = str(int(mass[i][2]) + 1)
+                    #d_t(mass,ii)
             '''
             #?
             if( mass[i][3] > mass[i+1][3] ):
@@ -298,12 +311,12 @@ def drawbridges(data):
             else:
             '''                    
         return data_time
-
+    #sys.stderr.write(str(mass))
     if(args.flag_drawbridgesmod == 'l'):
         data_time = ladder(mass)
     if(args.flag_drawbridgesmod == 's1'):
         data_time = simple_first(mass)
-
+    #sys.stderr.write(str(data_time))
     return data_time
 
 # separate mass of overlap satelite time to one overlap unite
