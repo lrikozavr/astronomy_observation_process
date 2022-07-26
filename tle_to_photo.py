@@ -38,6 +38,10 @@ def parse_arg():
             '--constants', '-c', dest = 'const', type = int,
             default = [30,5,8,2,2], nargs = 5, help = 'Observation const, where: shoot, calibr, command_decoding_time, speed_Az, speed_Um'
             )
+    parser.add_argument(
+            '--preview', '-v', dest = 'flag_view',
+            default = 'f', type = str, help = 'View final list in stderr (t/f/tf)'
+    )
     return parser.parse_args()
 args = parse_arg()
 #########
@@ -392,9 +396,6 @@ def dots_1(Az0,Az1,Um0,Um1,time0,time1):
     else: flag = 0
     return flag,-delta_t        
 
-
-#print(localtime)
-#print(data['mag'])
 #define dots for observation
 def dots_2(data):
     import math
@@ -424,22 +425,29 @@ def dataframe_join(data,names,tab):
         else: line += str(data[name][0])
     return line
 
+def flag_line(line):
+    if(args.flag_view == 't'):
+        sys.stderr.write(line)
+    elif(args.flag_view == 'f'):
+        sys.stdout.write(line)
+    elif(args.flag_view == 'tf'):
+        sys.stderr.write(line)
+        sys.stdout.write(line)
+
 def output_mass_format(data,tab):
     line = join(data.columns.values,tab)
-    sys.stdout.write(line + '\n')
+    flag_line(line + '\n')
     for i in range(len(data)):
         #sys.stderr.write(str(data.iloc[[i]]))
         line = dataframe_join(data.iloc[[i]],data.columns.values,tab)
         line += '\n'
-        sys.stderr.write(line)
-        sys.stdout.write(line)
-
+        flag_line(line)
 #output in stdout
 if(args.flag_format == 'data'):
     from tabulate import tabulate
     def to_fwf(df):
         content = tabulate(df.values.tolist(), list(df.columns), tablefmt="plain")
-        sys.stdout.write(content)
+        flag_line(content)
     to_fwf(data_new)
 if(args.flag_format == 'csv'):
     output_mass_format(data_new,',')
