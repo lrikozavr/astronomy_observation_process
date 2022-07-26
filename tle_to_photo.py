@@ -1,5 +1,53 @@
 # -*- coding: utf-8 -*-
+import sys
+import argparse
+
+#PC time now
 import time
+t = time.localtime()
+#change format of time value from hh:mm:ss to ss
+def time_to_sec(t_name):
+    n = t_name.split(':')
+    if(int(n[0]) < 12):
+        n[0] = str(int(n[0]) + 24)
+    return int(n[0]) * 3600 + int(n[1]) * 60 + int(n[2])
+#localtime = time_to_sec(time.strftime("%H:%M:%S", t))
+
+def parse_arg():
+    parser = argparse.ArgumentParser(
+            description = 'Satelite observation time definder (*.fcu to *.mit.txt)',
+            epilog = '@lrikozavr'
+            )
+    parser.add_argument(
+            '--filename', '-f', dest = 'filename',
+            type = str, help = 'File name or path/filename'
+            )
+    parser.add_argument(
+            '--time', '-t', dest = 'localtime',
+            default = time_to_sec(time.strftime("%H:%M:%S", t)), type = int, help = 'Begin time (s)'
+            )
+    parser.add_argument(
+            '--drawbridgesmod', '-dm', dest = 'flag_drawbridgesmod',
+            default = 's1', type = str, help = 'Mod of drawbridge overlap timeline, where: s1 - simple first, l - ladder'
+            )
+    parser.add_argument(
+            '--flag_format', '-s', dest = 'flag_format',
+            default = 'data', type = str, help = 'Output data format, where: data, csv, tab'
+            )
+    parser.add_argument(
+            '--constants', '-c', dest = 'const', type = int,
+            default = [30,5,8,2,2], nargs = 5, help = 'Observation const, where: shoot, calibr, command_decoding_time, speed_Az, speed_Um'
+            )
+    return parser.parse_args()
+args = parse_arg()
+#########
+localtime = args.localtime
+shoot = args.const[0]
+calibr = args.const[1]
+const_3 = args.const[2]
+speed_Az = args.const[3]
+speed_Um = args.const[4]
+#########
 import numpy as np
 import pandas as pd
 #cut subline from line
@@ -8,12 +56,7 @@ def str_cut(str,start,end):
     for i in range(start,end,1):
         line += str[i]
     return line
-#change format of time value from hh:mm:ss to ss
-def time_to_sec(t_name):
-    n = t_name.split(':')
-    if(int(n[0]) < 12):
-        n[0] = str(int(n[0]) + 24)
-    return int(n[0]) * 3600 + int(n[1]) * 60 + int(n[2])
+
 #change format of time value from ss to hh:mm:ss
 def sec_to_time(t_sec):
     def t_c(t):
@@ -28,19 +71,17 @@ def sec_to_time(t_sec):
     h,m,s = t_c(h),t_c(m),t_c(s)
     return f'{h}:{m}:{s}'
 #filepath
-save_path = r'C:\Users\lrikozavr\work\LAO'
-file_path_fcu = r'C:\Users\lrikozavr\work\LAO\train0718.fcu'
-file = f'{file_path_fcu}'
-#PC time now
-t = time.localtime()
-localtime = time_to_sec(time.strftime("%H:%M:%S", t))
+#save_path = r'C:\Users\lrikozavr\work\LAO'
+#file_path_fcu = r'C:\Users\lrikozavr\work\LAO\train0718.fcu'
+#file = f'{file_path_fcu}'
+
 #list of parametrs to read loop
 name_line = 'ЭФЕМЕРИДЫ ПО ОБЪЕКТУ:'
 satelite_number = ''
 flag_data = 0
 flag_time_period_start = 0
 flag_time_period_end = 1
-#
+#set up UTC from PC
 UTC = sec_to_time(localtime)
 #
 data = []
@@ -48,33 +89,27 @@ timemass = []
 timeline = ''
 timelinemass = []
 #read file and make two massive
-def join(mass):
+#massive of values to string line
+def join(mass,tab):
     line = ''
     for i in range(len(mass)):
         if(i < len(mass)-1 ):
-            line += str(mass[i]) + ','
+            line += str(mass[i]) + tab
         else: line += str(mass[i])
     return line
 ##########################################
-#index_1 = 0
-##########################################
-for line in open(file, encoding = 'Windows-1251'):
+#read file *.fcu
+for line in open(args.filename, encoding = 'Windows-1251'):
     if(line == '\n'):
         if(flag_data):
             timelinemass.append(time_to_sec(UTC))
-            timeline = join(timelinemass)
+            timeline = join(timelinemass,',')
             if(len(timelinemass) > 1):
                 timemass.append(np.array([satelite_number,timeline]))
             timelinemass = []
             flag_data = 0
             flag_time_period_end = 1
             flag_time_period_start = 0
-            '''
-            index_1 += 1
-            if(index_1 == 4):
-                print(timemass)
-                exit()
-            '''
         continue
     if(line.split('  ')[0] == name_line):
         n = line.split('  ')
@@ -101,17 +136,12 @@ for line in open(file, encoding = 'Windows-1251'):
             flag_time_period_end = 0
             flag_time_period_start = 1
 ##########################################
-#f1 = open('timemass.txt','w')
-#f2 = open('data.txt','w')
-#print(timemass)
-#print(len(timemass))
-#f1.write(print(timemass))
-#f2.write(print(data))
-data = pd.DataFrame(np.array(data),columns=['name','time','mag','Az','Um'])
+data = pd.DataFrame(np.array(data),columns=['name','time','Az','Um','mag'])
 ##########################################
 count_satelite = len(timemass)
-print(count_satelite)
+#print(count_satelite)
 ##########################################
+#create timelinemass, timeline for each one satelite time observations
 timelinemass = []
 for i in range(count_satelite):
     name = timemass[i][0]
@@ -123,16 +153,13 @@ for i in range(count_satelite):
         else: timelinemass.append(np.array([name, n[j], -1, count])) # (j+2) // 2
 ##########################################
 timelinemass = pd.DataFrame(np.array(timelinemass), columns = ['name','time','flag_1','flag_n'])
-#print(timelinemass)
-#exit()
-#timelinemass.to_csv('sort.txt')
 ##########################################
 # make 'flag_d', namely density overlap
 def process_1(timelinemass):
-    timelinemass = timelinemass.sort_values(by=['time'],ignore_index=True)
-    #print(timelinemass)
-    #print(int(timelinemass['flag_1'][0]))
     if(len(timelinemass) > 0):
+        timelinemass = timelinemass.sort_values(by=['time'],ignore_index=True)
+        #print(timelinemass)
+        #print(int(timelinemass['flag_1'][0]))
         time_density = [int(timelinemass['flag_1'][0])]
         s=int(timelinemass['flag_1'][0])
         for i in range(len(timelinemass)):
@@ -140,10 +167,9 @@ def process_1(timelinemass):
                 s+=int(timelinemass['flag_1'][i])
                 time_density.append(s)
         timelinemass['flag_d'] = time_density
+        #print(time_density)
+    else: sys.stderr.write('length of timelinemass is 0')
     return timelinemass
-    
-    #return time_density
-#print(time_density)
 ##########################################
 # separate not overlap satelite time and overlap
 def process_2(timelinemass):
@@ -172,40 +198,30 @@ def process_2(timelinemass):
         else:
             data_time_process = pd.concat([data_time_process,temp], ignore_index=True)
             flag_data = 1
-    #print(data_satelite_name)
-    #exit()
-    
-    #data_time_process.loc[data_time_process['name'] == data_satelite_name[i][0]]
-
-    #for i in range(len(data_satelite_name)):
-    #    ['flag_n'] -= data_satelite_name[i][1]
-    
-    #print(data_satelite_name)
-    #data_time_process_1 = pd.DataFrame(columns=['name','time','flag_1','flag_n','flag_d'])
-    '''    
+    '''
+    #if we won't see one timeline of satelite in overlap group, when he has already in non-overlap group
+    data_time_process_1 = pd.DataFrame(columns=['name','time','flag_1','flag_n','flag_d'])
+   
     for i in range(len(data_time_process)):
         flag_1 = 0
         if(len(data_satelite_name) > 0):
-            for name in data_satelite_name:
+            for name in data_satelite_name:                  #range?
                 if(data_time_process['name'][i] == name):
                     flag_1 = 1
         if(flag_1 == 0):
             data_time_process_1 = pd.concat([data_time_process_1,data_time_process.iloc[[i]]], ignore_index=True)
-    '''    
-    #print(data_time_process_1)
     
     #data_time_process = data_time_process_1
-    '''
+    
     if(len(data_satelite_name) > 0):
         data_time_1,data_time_process = process_2(data_time_process)
-        process_1(data_time_process)
+        data_time_process = process_1(data_time_process)
         data_time = pd.concat([data_time,data_time_1],ignore_index=True)
-    '''
     #print(data_time)
     #print(data_time_process)
     #data_time_process.to_csv(f'{save_path}/data_time_process.csv')
     #exit()
-
+    '''
     return data_time,data_time_process
 
 # separate unite overlap satelite time to not overlap 
@@ -252,7 +268,8 @@ def drawbridges(data):
         for i in range(len(mass)):
             data_time = ap_line(data_time,mass,i)
         #print(data_time)
-        #data_time = process_1(data_time)
+        data_time = process_1(data_time)
+        sys.stderr.write(str(data_time))
         return data_time
 
     def simple_first(mass):
@@ -269,6 +286,7 @@ def drawbridges(data):
                     mass[ii][1] = mass[i][2]
                     d_t(mass,ii)
             '''
+            #?
             if( mass[i][3] > mass[i+1][3] ):
                 if(mass[i][2] > mass[i+1][2]):
                     #data_time = ap_line(data_time,mass,i)
@@ -280,12 +298,12 @@ def drawbridges(data):
             else:
             '''                    
         return data_time
-    #data_time = ladder(mass)
-    data_time = simple_first(mass)
-    
-    #print(data_time)
-#    for i in range(len(data)):
-#        data['time'][i]
+
+    if(args.flag_drawbridgesmod == 'l'):
+        data_time = ladder(mass)
+    if(args.flag_drawbridgesmod == 's1'):
+        data_time = simple_first(mass)
+
     return data_time
 
 # separate mass of overlap satelite time to one overlap unite
@@ -302,39 +320,21 @@ def split_data(data):
             data_process = pd.DataFrame(columns=['name','time','flag_1','flag_n','flag_d'])
     return data_process_1
 
-
 data_time,data_time_process = process_2(timelinemass)
-
 #print(data_time_process)
 data_time_process = split_data(data_time_process)
 #print(data_time_process)
 data_time = pd.concat([data_time,data_time_process], ignore_index=True)
-#data_time = process_1(data_time)
-a1,a2 = process_2(data_time)
-#print(a2)
-#print(a1)
-'''
-for i in range(len(a1)):
-    flag = 0
-    index = 0
-    for j in range(i,len(a1),1):
-        if(a1['name'][i] == a1['name'][j]):
-            index = j
-            flag+=1
-    if(flag>2):
-        print(a1['name'][i], index, i)
-'''
-#print(data)
-#print(a1)
+data_time = process_1(data_time)
 #print(data_time)
-#print(data_time_process)
-
-#прибрати дублікати - поки нема такої потреби
-
+#cut non-overlap timeline from origin satelites timeline 
 def satelite_process_1(data,data_time):
     data_new = pd.DataFrame()
     for j in range(len(data_time)):
         data_new_temp = pd.DataFrame()
+        #print()
+        #print(data_time['flag_d'][j])
+        #print()
         if(data_time['flag_d'][j]):
             continue
         for i in range(len(data)):
@@ -342,42 +342,28 @@ def satelite_process_1(data,data_time):
                 data_new_temp = pd.concat([data_new_temp,data.iloc[[i]]],ignore_index=True)
         data_new = pd.concat([data_new,data_new_temp],ignore_index=True)
     return data_new
+#split data and data_time for satelite_process_1
+def satelite_process_2(data, data_time):
+    name = data['name'][0]
+    data_temp = pd.DataFrame()
+    data_new = pd.DataFrame()
+    for i in range(len(data)):
+        if(data['name'][i] == name):
+            data_temp = pd.concat([data_temp,data.iloc[[i]]], ignore_index=True)
+        else:
+            data_time_temp = pd.DataFrame()
+            for j in range(len(data_time)):
+                if(data_time['name'][j] == name):
+                    data_time_temp = pd.concat([data_time_temp,data_time.iloc[[j]]],ignore_index=True)
+            data_new = pd.concat([data_new,satelite_process_1(data_temp,data_time_temp)],ignore_index=True)
+            data_temp = pd.DataFrame()        
+            name = data['name'][i]
+    return data_new.sort_values(by='time',ignore_index=True)
 
-name = data['name'][0]
-data_temp = pd.DataFrame()
-data_new = pd.DataFrame()
-for i in range(len(data)):
-    if(data['name'][i] == name):
-        data_temp = pd.concat([data_temp,data.iloc[[i]]], ignore_index=True)
-    else:
-        data_time_temp = pd.DataFrame()
-#        index = 0
-        for j in range(len(a1)): #a1 - massive
-#            if(index == 2):
-#                break
-            if(a1['name'][j] == name):
-                data_time_temp = pd.concat([data_time_temp,a1.iloc[[j]]],ignore_index=True)
-#                index += 1   
-        data_new = pd.concat([data_new,satelite_process_1(data_temp,data_time_temp)],ignore_index=True)
-        data_temp = pd.DataFrame()        
-        name = data['name'][i]
-
-#data.to_csv(f'{save_path}/data.csv')
-data_new = data_new.sort_values(by='time',ignore_index=True)
-data = data_new
-#print(data)
-
-localtime = 60000
-
-#print(data_new)
-#data_new.to_csv(f'{save_path}/text.csv')    
-#exit()
-
-shoot = 30
-calibr = 5
-const_3 = 8
-
+data = satelite_process_2(data, data_time)
+#calculate time gap between time observation unites
 def dots_1(Az0,Az1,Um0,Um1,time0,time1):
+    #точка перегину 180, якщо менше 180 йде до більше 180, то рахується шлях через зменшення.
     def Az_format(az):
         if(az >= 0 and az <= 180):
             az = abs(az - 180)
@@ -386,7 +372,7 @@ def dots_1(Az0,Az1,Um0,Um1,time0,time1):
         return az
     Az0 = Az_format(Az0)
     Az1 = Az_format(Az1)
-    delta_t = abs(Az1 - Az0)*0.5 + abs(Um1 - Um0)*0.5 + shoot + const_3 + calibr - (time1 - time0)
+    delta_t = abs(Az1 - Az0)*(1/speed_Az) + abs(Um1 - Um0)*(1/speed_Um) + shoot + const_3 + calibr - (time1 - time0)
 #    delta_t = abs(Az1 - Az0)*0.5 + abs(Um1 - Um0)*0.5  + 4 - (time1 - time0)
     if(delta_t <= 0):
         flag = 1
@@ -394,19 +380,55 @@ def dots_1(Az0,Az1,Um0,Um1,time0,time1):
     return flag,-delta_t        
 
 
-Az0,Um0,time0 = 0,0,localtime
-print(localtime)
-data_new = pd.DataFrame()
-for i in range(len(data)):
-    Az1,Um1,time1 = float(data['Az'][i]),float(data['Um'][i]),int(data['time'][i])
-    flag,delta_t = dots_1(Az0,Az1,Um0,Um1,time0,time1)
-    if(flag):
-        temp = pd.DataFrame(np.array([[data['name'][i],Az1,Um1,time1,delta_t]]),columns=['name','Az','Um','time','delta_t'])
-        data_new = pd.concat([data_new,temp], ignore_index=True)
-        Az0,Um0,time0 = Az1,Um1,time1
-    
-print(data_new)
+#print(localtime)
+#print(data['mag'])
+#define dots for observation
+def dots_2(data):
+    import math
+    Az0,Um0,time0 = 0,0,localtime
+    data_new = pd.DataFrame()
+    index=0
+    for i in range(len(data)):
+        Az1,Um1,time1 = float(data['Az'][i]),float(data['Um'][i]),int(data['time'][i])
+        flag,delta_t = dots_1(Az0,Az1,Um0,Um1,time0,time1)
+        if(flag):
+            index+=1
+            temp = pd.DataFrame(np.array([[index,data['name'][i],sec_to_time(time1),math.trunc(delta_t),Az1,Um1,data['mag'][i]]]),columns=['N','name','time','delta_t','Az','Um','Mag'])
+            data_new = pd.concat([data_new,temp], ignore_index=True)
+            Az0,Um0,time0 = Az1,Um1,time1
+    return data_new
 
-data_new.to_csv(f'{save_path}/final_data.csv')
+data_new = dots_2(data)
 
-#точка перегину 180, якщо менше 180 йде до більше 180, то рахується шлях через зменшення.
+def dataframe_join(data,names,tab):
+    index = 0
+    line = ''
+    data = data.reset_index(drop=True)
+    for name in names:
+        index += 1
+        if(not len(names) == index):
+            line += str(data[name][0]) + tab
+        else: line += str(data[name][0])
+    return line
+
+def output_mass_format(data,tab):
+    line = join(data.columns.values,tab)
+    sys.stdout.write(line + '\n')
+    for i in range(len(data)):
+        #sys.stderr.write(str(data.iloc[[i]]))
+        line = dataframe_join(data.iloc[[i]],data.columns.values,tab)
+        line += '\n'
+        sys.stderr.write(line)
+        sys.stdout.write(line)
+
+#output in stdout
+if(args.flag_format == 'data'):
+    from tabulate import tabulate
+    def to_fwf(df):
+        content = tabulate(df.values.tolist(), list(df.columns), tablefmt="plain")
+        sys.stdout.write(content)
+    to_fwf(data_new)
+if(args.flag_format == 'csv'):
+    output_mass_format(data_new,',')
+if(args.flag_format == 'tab'):
+    output_mass_format(data_new,'\t')
