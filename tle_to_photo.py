@@ -36,7 +36,7 @@ def parse_arg():
             )
     parser.add_argument(
             '--constants', '-c', dest = 'const', type = int,
-            default = [30,5,8,2,2], nargs = 5, help = 'Observation const, where: shoot, calibr, command_decoding_time, speed_Az, speed_Um'
+            default = [40,5,15,2,2], nargs = 5, help = 'Observation const, where: shoot, calibr, command_decoding_time, speed_Az, speed_Um'
             )
     parser.add_argument(
             '--preview', '-v', dest = 'flag_view',
@@ -80,11 +80,12 @@ def sec_to_time(t_sec):
 #file = f'{file_path_fcu}'
 
 #list of parametrs to read loop
+tle_time_rate = 10
 name_line = 'ЭФЕМЕРИДЫ ПО ОБЪЕКТУ:'
 satelite_number = ''
 flag_data = 0
-flag_time_period_start = 0
-flag_time_period_end = 1
+flag_time_period_start = 1
+flag_time_period_end = 0
 #set up UTC from PC
 UTC = sec_to_time(localtime)
 #
@@ -112,8 +113,8 @@ for line in open(args.filename, encoding = 'Windows-1251'):
                 timemass.append(np.array([satelite_number,timeline]))
             timelinemass = []
             flag_data = 0
-            flag_time_period_end = 1
-            flag_time_period_start = 0
+            flag_time_period_end = 0
+            flag_time_period_start = 1
         continue
     if(line.split('  ')[0] == name_line):
         n = line.split('  ')
@@ -125,23 +126,25 @@ for line in open(args.filename, encoding = 'Windows-1251'):
     if(flag_data):
         UTC_label = str_cut(line,12,20)
         d_UTC_temp = time_to_sec(UTC_label) - time_to_sec(UTC)
-        if(abs(d_UTC_temp) > 10 and flag_time_period_start):
+        if(abs(d_UTC_temp) > tle_time_rate and flag_time_period_end):
             timelinemass.append(time_to_sec(UTC))
-            flag_time_period_end = 1
-            flag_time_period_start = 0
+            flag_time_period_end = 0
+            flag_time_period_start = 1
         #UTC = time_to_sec(UTC_label)
         UTC = UTC_label
         Mag = float(str_cut(line,108,111))
         Az = float(str_cut(line,78,85))
         Um = float(str_cut(line,86,92))        
         data.append(np.array([satelite_number,time_to_sec(UTC),Az,Um,Mag])) #UTC
-        if(flag_time_period_end):
+        if(flag_time_period_start):
             timelinemass.append(time_to_sec(UTC))
-            flag_time_period_end = 0
-            flag_time_period_start = 1
+            flag_time_period_end = 1
+            flag_time_period_start = 0
 ##########################################
 data = pd.DataFrame(np.array(data),columns=['name','time','Az','Um','mag'])
+data.to_csv(r'C:\Users\lrikozavr\work\LAO\data_1.csv')
 ##########################################
+sys.stderr.write(str(timemass))
 count_satelite = len(timemass)
 #print(count_satelite)
 ##########################################
@@ -343,6 +346,7 @@ data_time_process = split_data(data_time_process)
 #print(data_time_process)
 data_time = pd.concat([data_time,data_time_process], ignore_index=True)
 data_time = process_1(data_time)
+sys.stderr.write(str(data_time))
 #print(data_time)
 #cut non-overlap timeline from origin satelites timeline 
 def satelite_process_1(data,data_time):
@@ -355,11 +359,11 @@ def satelite_process_1(data,data_time):
         if(data_time['flag_d'][j]):
             continue
         for i in range(len(data)):
-            if(data['time'][i] > data_time['time'][j-1]  and  data['time'][i] < data_time['time'][j]):
+            if(data['time'][i] >= data_time['time'][j-1]  and  data['time'][i] <= data_time['time'][j]):
                 data_new_temp = pd.concat([data_new_temp,data.iloc[[i]]],ignore_index=True)
         data_new = pd.concat([data_new,data_new_temp],ignore_index=True)
     return data_new
-#split data and data_time for satelite_process_1
+#split data and data_time for satelite_process1
 def satelite_process_2(data, data_time):
     name = data['name'][0]
     data_temp = pd.DataFrame()
